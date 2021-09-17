@@ -28,7 +28,7 @@ $ python run.py -mode=blackbox
 ```
 Make sure the configuration file has the option `blackbox_method` and is set to `substitute`.
 
-#### Input Reconstruction
+### Input Reconstruction
 To train the Bi-TIR with attacked sentences, please run:
 ```sh
 $ python train.py -epochs 100 -batchsize 300  -is_train
