@@ -32,11 +32,11 @@ Make sure the configuration file has the option `blackbox_method` and is set to 
 To train the Bi-TIR with attacked sentences, please run:
 ```sh
 $ python train.py -epochs 100 -batchsize 300  -is_train
-$ python dep_val.py
 ```
 Then use the trained model to denoise the adversarial examples using command:
 ```sh
 $ python train.py -k 20 -batchsize 300
+$ python dep_val.py
 ```
 
 After reconstructing the input sentences, attack them again by setting the option `blackbox_method` to `denoise`, then run:
