@@ -1,4 +1,4 @@
-from dpattack.utils.corpus import Corpus, init_sentence
+from LossAttack.utils.corpus import Corpus, init_sentence
 import re
 
 

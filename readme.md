@@ -27,6 +27,7 @@ To attack the trained target parser above, please run:
 $ python run.py -mode=blackbox
 ```
 Make sure the configuration file has the option `blackbox_method` and is set to `substitute`.
+* If you want to change the attack corpus, please change the corpus loaded in line 30 in LossAttack/LossAttack/cmds/attack.py to `config.ftrain/fdev/ftest`. Also make sure the configuration `blackbox_index` is set to the correspoding `train/dev/test`.
 
 ### Input Reconstruction
 To train the Bi-TIR with attacked sentences, please run:

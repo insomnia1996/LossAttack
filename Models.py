@@ -67,9 +67,9 @@ class Transformer_bak(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, config, trg_vocab):
         super().__init__()
-        self.encoder = BartEncoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/data/luoyt/dpattack/data/pretrained/bart-base")
+        self.encoder = BartEncoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base")
         config.vocab_size = trg_vocab
-        self.decoder = BartDecoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/data/luoyt/dpattack/data/pretrained/bart-base")
+        self.decoder = BartDecoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base")
         self.out = nn.Linear(config.d_model, config.vocab_size)
         #print("d_model, vocab_size:",config.d_model, config.vocab_size)
         n_rels=47

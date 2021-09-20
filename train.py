@@ -266,8 +266,8 @@ def main_for_bi_tir():
     parser.add_argument('-floyd', action='store_true')
     parser.add_argument('-checkpoint', type=int, default=0)
     parser.add_argument('-device', type=int, default=0)
-    parser.add_argument('-tensor_dir', type=str, default='/data/luoyt/dpattack/data/tensor')
-    parser.add_argument('-data_path', type=str, default='/data/luoyt/dpattack/data')
+    parser.add_argument('-tensor_dir', type=str, default='/home/lyt/LossAttack/data/tensor')
+    parser.add_argument('-data_path', type=str, default='/home/lyt/LossAttack/data')
 
     opt = parser.parse_args()
     

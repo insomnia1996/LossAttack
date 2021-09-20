@@ -2,9 +2,9 @@
 
 import argparse
 import os
-from dpattack.cmds.DEC.dependency_check import DEC
-from dpattack.cmds import Evaluate, Predict, Train
-from dpattack.cmds.blackbox.blackbox import BlackBoxAttack
+from LossAttack.cmds.DEC.dependency_check import DEC
+from LossAttack.cmds import Evaluate, Predict, Train
+from LossAttack.cmds.blackbox.blackbox import BlackBoxAttack
 from config import Config
 import torch
 

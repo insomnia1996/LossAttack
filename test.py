@@ -83,13 +83,13 @@ def dec(ids):
     text = "".join(tokens).replace("Ġ"," ")
     return text
 '''
-nlp = StanfordCoreNLP(r'/data/luoyt/stanford-corenlp-4.0.0', memory='8g', timeout=50000, quiet=False)
+nlp = StanfordCoreNLP(r'/home/lyt/stanford-corenlp-4.0.0', memory='8g', timeout=50000, quiet=False)
 
 str1=nlp.parse("it 's what 1 -rrb- explains why we are like , well , ourselves otherwise than <UNK> jackson ; 2 -rrb- cautions that it 's possible to <UNK> in a lake that averages two feet deep ; and 3 -rrb- predicts that 10,000 <UNK> placed before 10,000 <UNK> would produce <UNK> <UNK> rock 'n' roll <UNK> .")
 print(deleaf(str1))
 '''
 #再把deleaf的结果当作句法树输入 
-cache_dir="/data/luoyt/dpattack/data/pretrained/bart-base"
+cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base"
 bartconfig = BartConfig.from_pretrained('facebook/bart-base', cache_dir=cache_dir)
 seq2seq = BartModel(bartconfig).to(device)#.from_pretrained('facebook/bart-base', cache_dir=cache_dir).to(device)
 encoder = seq2seq.encoder
@@ -104,8 +104,8 @@ optimizer = torch.optim.Adam(
             lr=1e-3)
 for i in range(1000):
     print("Epoch %d..." %i)
-    with open('/data/luoyt/dpattack/data/tmp/ori.txt','r')as f:
-        g = open('/data/luoyt/dpattack/data/tmp/adv.txt','r')
+    with open('/home/lyt/LossAttack/data/tmp/ori.txt','r')as f:
+        g = open('/home/lyt/LossAttack/data/tmp/adv.txt','r')
         ori_lines = f.readlines()
         adv_lines = g.readlines()
         for idx, line in enumerate(ori_lines):
