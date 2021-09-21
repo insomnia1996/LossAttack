@@ -15,7 +15,7 @@ Loss Attack is a black-box attack on neural dependency parsers.
 ### Train
 To train the target parser, please run:
 ```sh
-$ python run.py -mode=train
+$ python run.py --mode=train
 ```
 
 You can configure the model in `config.ini`
@@ -24,7 +24,7 @@ You can configure the model in `config.ini`
 To attack the trained target parser above, please run:
 
 ```sh
-$ python run.py -mode=blackbox
+$ python run.py --mode=blackbox
 ```
 Make sure the configuration file has the option `blackbox_method` and is set to `substitute`.
 * If you want to change the attack corpus, please change the corpus loaded in line 30 in LossAttack/LossAttack/cmds/attack.py to `config.ftrain/fdev/ftest`. Also make sure the configuration `blackbox_index` is set to the correspoding `train/dev/test`.
@@ -42,7 +42,7 @@ $ python dep_val.py
 
 After reconstructing the input sentences, attack them again by setting the option `blackbox_method` to `denoise`, then run:
 ```sh
-$ python run.py -mode=blackbox
+$ python run.py --mode=blackbox
 ```
 
 
