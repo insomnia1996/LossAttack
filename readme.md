@@ -4,9 +4,9 @@ Loss Attack is a black-box attack on neural dependency parsers.
 
 # Requirements:
 
-`Python`: 3.7
+`Python`: 3.8.10
 
-`PyTorch`: 1.4.0
+`PyTorch`: 1.8.0
 
 `transformers`: 4.8.0
 
@@ -44,6 +44,3 @@ After reconstructing the input sentences, attack them again by setting the optio
 ```sh
 $ python run.py --mode=blackbox
 ```
-
-
- 
