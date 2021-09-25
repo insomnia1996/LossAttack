@@ -10,18 +10,23 @@ import pickle
 from transformers import BartTokenizer
 from tqdm import tqdm
 
-def null(model, opt):# save count_map {sentid_in_train: sentid} to match each sentence.
+def null(model, opt, arg):# save count_map {sentid_in_train: sentid} to match each sentence.
     print("fetching number map...")
     f  = open(os.path.join(opt.data_path, "result","count_map.txt"), 'w')
-    for i, batch in enumerate(opt.train): 
+    if arg=='train':
+        loader = opt.train
+    elif arg=='eval':
+        loader = opt.eval
+    else:
+        loader = opt.test
+    for i, batch in enumerate(loader): 
         trg, trg_arc, trg_rel, src, src_arc, src_rel, number = list(batch)
-        print(number, number.shape)
         for n in number:
             #print(n)
             f.write(str(n.item())+'\n')
     f.close()
 
-def train_model(model, opt):
+def train_model(model, opt, arg):
     tokenizer2 = BartTokenizer.from_pretrained('facebook/bart-base', cache_dir = "./data/pretrained/bart-base")
     print("training model...")
     model.train()
@@ -29,8 +34,14 @@ def train_model(model, opt):
     if opt.checkpoint > 0:
         cptime = time.time()
     best=0
+    if arg=='train':
+        loader = opt.train
+    elif arg=='eval':
+        loader = opt.eval
+    else:
+        loader = opt.test
     for epoch in range(opt.epochs):
-
+        print("=====Epoch %d======" %epoch)
         total_loss = 0
         if opt.floyd is False:
             print("   %dm: epoch %d [%s]  %d%%  loss = %s" %\
@@ -39,13 +50,13 @@ def train_model(model, opt):
         if opt.checkpoint > 0:
             torch.save(model.state_dict(), 'weights/model_weights')
                     
-        for i, batch in enumerate(opt.train): 
+        for i, batch in enumerate(loader): 
             if i>500:
                 break
             #MODIFIED
             #src = batch.src.transpose(0,1)
             #trg = batch.trg.transpose(0,1)
-            trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+            trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
             trg_input = trg[:, :-1]
             trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
             trg_rel = trg_rel[:,:-1]#长度与trg_sent不等，需单独mask
@@ -87,13 +98,14 @@ def train_model(model, opt):
 
         print("%dm: epoch %d [%s%s]  %d%%  loss = %.3f\nepoch %d complete, loss = %.03f  acc = %.4f" %\
         ((time.time() - start)//60, epoch + 1, "".join('#'*(100//5)), "".join(' '*(20-(100//5))), 100, avg_loss, epoch + 1, avg_loss, acc))
-        if epoch > opt.patience and acc > best:
-            best=acc
+        acc_eval = evaluate_model(model, opt, 'eval')
+        if epoch > opt.patience and acc_eval > best:
+            best=acc_eval
             torch.save(model.state_dict(), 'weight/model_weights.pkl')#_denoiser
-        evaluate_model(model, opt)
+        
 
 
-def evaluate_model(model, opt):
+def evaluate_model(model, opt, arg):
     #state_dict = torch.load('weight/model_weights.pkl')
     #model.load_state_dict(state_dict)
 
@@ -103,12 +115,18 @@ def evaluate_model(model, opt):
     start = time.time()
     if opt.checkpoint > 0:
         cptime = time.time()
-    total_loss = 0      
-    for i, batch in enumerate(opt.eval): 
+    total_loss = 0    
+    if arg=='train':
+        loader = opt.train
+    elif arg=='eval':
+        loader = opt.eval
+    else:
+        loader = opt.test  
+    for i, batch in enumerate(loader): 
         #MODIFIED
         #src = batch.src.transpose(0,1)
         #trg = batch.trg.transpose(0,1)
-        trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+        trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
         trg_input = trg[:, :-1]
         trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
         trg_rel = trg_rel[:,:-1]#长度与trg_sent不等，需单独mask
@@ -123,25 +141,25 @@ def evaluate_model(model, opt):
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=opt.trg_pad, reduction='mean')
         loss = loss_fct(preds.view(-1, preds.size(-1)), ys.view(-1))
         acc = acc_sent(preds, ys, ignore_index=opt.trg_pad)
-        #print("gold: ", tokenizer2.decode(trg[0]))
-        #print("pred: ", tokenizer2.decode(torch.argmax(preds,-1)[0]))
+        print("gold: ", tokenizer2.decode(trg[0]))
+        print("pred: ", tokenizer2.decode(torch.argmax(preds,-1)[0]))
         #print("loss: %.4f, acc: %.4f. " % (loss.item(), acc))
 
         
         total_loss += loss.item()
         
-        if (i + 1) % opt.printevery == 0:
-            p = int(100 * (i + 1) / opt.train_len)
-            avg_loss = total_loss/opt.printevery
-            if opt.floyd is False:
-                print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
-                ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc), end='\r')
-            else:
-                print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
-                ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc))
-                total_loss = 0
+        p = int(100 * (i + 1) / opt.train_len)
+        avg_loss = total_loss/opt.printevery
+        if opt.floyd is False:
+            print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
+            ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc), end='\r')
+        else:
+            print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
+            ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc))
+            total_loss = 0
+    return acc
 
-def predict(model, opt):
+def predict(model, opt, arg):
     state_dict = torch.load('weight/model_weights.pkl')
     model.load_state_dict(state_dict)
     f = open(os.path.join(opt.data_path, "result","res.txt"), 'w')
@@ -154,8 +172,14 @@ def predict(model, opt):
     start = time.time()
     cnt=0
     ttl=0
-    for i, batch in enumerate(tqdm(opt.train)): 
-        trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+    if arg=='train':
+        loader = opt.train
+    elif arg=='eval':
+        loader = opt.eval
+    else:
+        loader = opt.test
+    for i, batch in enumerate(tqdm(loader)): 
+        trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
         
         trg_input = trg[:, :-1]
         trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
@@ -318,10 +342,10 @@ def main_for_bi_tir():
     #    pickle.dump(SRC, open('weights/SRC.pkl', 'wb'))
     #    pickle.dump(TRG, open('weights/TRG.pkl', 'wb'))
     if opt.is_train:
-        train_model(model, opt)
-        null(model, opt)
+        train_model(model, opt, 'train')
+        null(model, opt, 'test')
     else:
-        predict(model, opt)
+        predict(model, opt, 'test')
 
 
 def yesno(response):
