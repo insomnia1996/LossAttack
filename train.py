@@ -41,7 +41,7 @@ def train_model(model, opt, arg):
     else:
         loader = opt.test
     for epoch in range(opt.epochs):
-        print("=====Epoch %d======" %epoch)
+
         total_loss = 0
         if opt.floyd is False:
             print("   %dm: epoch %d [%s]  %d%%  loss = %s" %\
@@ -51,9 +51,6 @@ def train_model(model, opt, arg):
             torch.save(model.state_dict(), 'weights/model_weights')
                     
         for i, batch in enumerate(loader): 
-            if i>500:
-                break
-            #MODIFIED
             #src = batch.src.transpose(0,1)
             #trg = batch.trg.transpose(0,1)
             trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
@@ -98,11 +95,10 @@ def train_model(model, opt, arg):
 
         print("%dm: epoch %d [%s%s]  %d%%  loss = %.3f\nepoch %d complete, loss = %.03f  acc = %.4f" %\
         ((time.time() - start)//60, epoch + 1, "".join('#'*(100//5)), "".join(' '*(20-(100//5))), 100, avg_loss, epoch + 1, avg_loss, acc))
-        acc_eval = evaluate_model(model, opt, 'eval')
-        if epoch > opt.patience and acc_eval > best:
-            best=acc_eval
+        if epoch > opt.patience and acc > best:
+            best=acc
             torch.save(model.state_dict(), 'weight/model_weights.pkl')#_denoiser
-        
+        evaluate_model(model, opt, 'eval')
 
 
 def evaluate_model(model, opt, arg):
@@ -141,23 +137,23 @@ def evaluate_model(model, opt, arg):
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=opt.trg_pad, reduction='mean')
         loss = loss_fct(preds.view(-1, preds.size(-1)), ys.view(-1))
         acc = acc_sent(preds, ys, ignore_index=opt.trg_pad)
-        print("gold: ", tokenizer2.decode(trg[0]))
-        print("pred: ", tokenizer2.decode(torch.argmax(preds,-1)[0]))
+        #print("gold: ", tokenizer2.decode(trg[0]))
+        #print("pred: ", tokenizer2.decode(torch.argmax(preds,-1)[0]))
         #print("loss: %.4f, acc: %.4f. " % (loss.item(), acc))
 
         
         total_loss += loss.item()
         
-        p = int(100 * (i + 1) / opt.train_len)
-        avg_loss = total_loss/opt.printevery
-        if opt.floyd is False:
-            print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
-            ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc), end='\r')
-        else:
-            print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
-            ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc))
-            total_loss = 0
-    return acc
+        if (i + 1) % opt.printevery == 0:
+            p = int(100 * (i + 1) / opt.train_len)
+            avg_loss = total_loss/opt.printevery
+            if opt.floyd is False:
+                print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
+                ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc), end='\r')
+            else:
+                print("   %dm: [%s%s]  %d%%  loss = %.3f  acc = %.4f" %\
+                ((time.time() - start)//60, "".join('#'*(p//5)), "".join(' '*(20-(p//5))), p, avg_loss, acc))
+                total_loss = 0
 
 def predict(model, opt, arg):
     state_dict = torch.load('weight/model_weights.pkl')
@@ -290,8 +286,8 @@ def main_for_bi_tir():
     parser.add_argument('-floyd', action='store_true')
     parser.add_argument('-checkpoint', type=int, default=0)
     parser.add_argument('-device', type=int, default=0)
-    parser.add_argument('-tensor_dir', type=str, default='/home/lyt/LossAttack/data/tensor')
-    parser.add_argument('-data_path', type=str, default='/home/lyt/LossAttack/data')
+    parser.add_argument('-tensor_dir', type=str, default='/data/luoyt/dpattack/data/tensor')
+    parser.add_argument('-data_path', type=str, default='/data/luoyt/dpattack/data')
 
     opt = parser.parse_args()
     
@@ -342,10 +338,10 @@ def main_for_bi_tir():
     #    pickle.dump(SRC, open('weights/SRC.pkl', 'wb'))
     #    pickle.dump(TRG, open('weights/TRG.pkl', 'wb'))
     if opt.is_train:
-        train_model(model, opt, 'train')
-        null(model, opt, 'test')
+        train_model(model, opt,'train')
+        null(model, opt,'test')
     else:
-        predict(model, opt, 'test')
+        predict(model, opt,'test')
 
 
 def yesno(response):
