@@ -41,7 +41,7 @@ def train_model(model, opt, arg):
     else:
         loader = opt.test
     for epoch in range(opt.epochs):
-
+        print("========== Training epoch %d ==========" %epoch)
         total_loss = 0
         if opt.floyd is False:
             print("   %dm: epoch %d [%s]  %d%%  loss = %s" %\
