@@ -1,6 +1,6 @@
 # KLAttack
 
-Loss Attack is a black-box attack on neural dependency parsers.
+KLAttack is a black-box attack on neural dependency parsers.
 
 # Requirements:
 
