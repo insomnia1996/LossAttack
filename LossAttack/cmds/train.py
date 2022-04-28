@@ -5,11 +5,11 @@ from datetime import datetime, timedelta
 from LossAttack.utils.parser_helper import init_parser, load_parser
 from LossAttack.utils.metric import ParserMetric, TaggerMetric
 from LossAttack.utils.corpus import Corpus
-from LossAttack.utils.pretrained import Pretrained
 from LossAttack.utils.vocab import Vocab
+from LossAttack.utils.pretrained import Pretrained
 from LossAttack.models import WordParser, WordTagParser, WordCharParser, CharParser, PosTagger
 from LossAttack.utils.data import TextDataset, batchify, collate_fn
-from LossAttack.task import ParserTask, TaggerTask
+from LossAttack.task import ParserTask, TaggerTask, StackPtrParserTask
 from shutil import copyfile
 
 import torch
@@ -77,16 +77,19 @@ class Train(object):
 
         if is_training_parser:
             model = init_parser(config, vocab.embeddings.weight)
-            task = ParserTask(vocab, model)
+            if config.input !='stackptr':
+                task = ParserTask(vocab, model)
+            else:
+                print("under stackptr task...")
+                task = StackPtrParserTask(vocab, model)
             best_e, best_metric = 1, ParserMetric()
         else:
             model = PosTagger(config, vocab.embeddings)
             task = TaggerTask(vocab, model)
             best_e, best_metric = 1, TaggerMetric()
-
         if torch.cuda.is_available():
             model = model.cuda()
-        print(f"{model}\n")
+        #print(f"{model}\n")
 
         total_time = timedelta()
         # best_e, best_metric = 1, TaggerMetric()

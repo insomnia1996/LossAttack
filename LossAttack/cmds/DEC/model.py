@@ -12,6 +12,7 @@ from transformers import (
     BartConfig
 )
 import numpy as np
+
 from transformers.models.bart.modeling_bart import (
     BartEncoder,
     BartDecoder,
@@ -62,6 +63,7 @@ class DECParser(PretrainedBartModel):
 
     def init_config(self, args):
         print("==== loading config ====")
+        
         config = BartConfig.from_pretrained('facebook/bart-base', cache_dir=args.cache_dir)
         config.d_model = args.n_embed
         #config.encoder_layers =8

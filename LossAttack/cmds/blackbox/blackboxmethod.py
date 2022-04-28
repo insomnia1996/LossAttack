@@ -1,3 +1,4 @@
+from nltk.util import print_string
 from LossAttack.utils.utils import get_blackbox_augmentor
 from LossAttack.utils.corpus import Corpus
 from LossAttack.cmds.blackbox.attackindex import *
@@ -6,7 +7,11 @@ from LossAttack.utils.aug import CharTypoAug
 from LossAttack.utils.tag_tool import gen_tag_dict
 from nltk import CRFTagger
 import regex as re
-
+from LossAttack.models.neuronlp2.models import StackPtrNet
+import os
+from LossAttack.utils.parser_helper import load_parser
+from LossAttack.task import ParserTask
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 class BlackBoxMethod(object):
     def __init__(self, vocab):
@@ -51,13 +56,28 @@ class Substituting(BlackBoxMethod):
     def __init__(self, config, task, vocab=None, parser=None):
         super(Substituting, self).__init__(vocab)
         self.task = task
+        ref_vocab = torch.load(config.vocab)
+        ref_parser = load_parser(os.path.join(config.workspace, "saved_models","crf_par", "parser.best"))
+        self.ref_task = ParserTask(ref_vocab, ref_parser)
         self.config = config
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        else:
+            self.device = torch.device('cpu')
+        self.parser = parser
+        self.ppl_tokenizer = GPT2Tokenizer.from_pretrained("gpt2", cache_dir=config.language_model_path)
+        self.ppl_model = GPT2LMHeadModel.from_pretrained("gpt2", cache_dir=config.language_model_path).to(self.device)
         self.index = self.get_index(config, vocab, parser)
         self.aug = get_blackbox_augmentor(config, config.blackbox_model, config.path, config.revised_rate, vocab=vocab, ftrain=config.ftrain)
         self.tag_dict = gen_tag_dict(Corpus.load(config.ftrain), vocab, 2, False)
         if self.config.blackbox_tagger == 'crf':
             self.crf_tagger = CRFTagger()
             self.crf_tagger.set_model_file(config.crf_tagger_path)
+        #self.ref_parser1 = StackPtrNet(self.config, biaffine=True, pos=True, char=False)
+        #self.ref_parser1.load_state_dict(torch.load("/home/lyt/LossAttack/data/saved_models/stackptr/network.pt"))
+        #self.ref_parser1.to(self.device)
+        self.ref_parser2 = load_parser(os.path.join(self.config.workspace, "saved_models","crf_par", "parser.best"))
+
 
     def get_index(self, config, vocab=None, parser=None):
         if config.mode == 'augmentation':
@@ -73,15 +93,65 @@ class Substituting(BlackBoxMethod):
     def generate_attack_seq(self, seqs, seq_idx, tags, tag_idx, chars, arcs, rels, mask, raw_metric=None):
         # generate word index to be attacked
         attack_index = self.index.get_attack_index(self.copy_str_to_list(seqs), seq_idx, tags, tag_idx, chars, arcs, rels, mask)
-        #这一步还没有把要攻击的位置mask掉
+        # 这一步还没有把要攻击的位置mask掉
         # generate word candidates to be attacked
         candidates, indexes = self.substituting(seqs, attack_index)
         # check candidates by pos_tagger
         candidates, indexes = self.check_pos_tag(seqs, tags, candidates, indexes)
         #print("candidates: ",candidates)
         attack_seq, revised_number = self.check_uas(seqs, tag_idx, arcs, rels, candidates, indexes, raw_metric)
-        print([Corpus.ROOT] + attack_seq)
+        print("After attack:", [Corpus.ROOT] + attack_seq)
         return [Corpus.ROOT] + attack_seq, tag_idx, mask, arcs, rels, revised_number
+
+    def generate_attack_seq_bak(self, seqs, seq_idx, tags, tag_idx, chars, arcs, rels, mask, raw_metric=None):
+        # generate word index to be attacked
+        attack_index = self.index.get_attack_index_bak(self.copy_str_to_list(seqs), seq_idx, tags, tag_idx, chars, arcs, rels, mask)
+        # 这一步还没有把要攻击的位置mask掉
+        # generate word candidates to be attacked
+        candidates, indexes = self.substituting(seqs, attack_index)
+        # check candidates by pos_tagger
+        candidates, indexes = self.check_pos_tag(seqs, tags, candidates, indexes)
+        #print("candidates: ",candidates)
+        attack_seq, revised_number = self.check_uas_bak(seqs, tag_idx, arcs, rels, candidates, indexes, raw_metric)
+        print("After attack:", [Corpus.ROOT] + attack_seq)
+        return [Corpus.ROOT] + attack_seq, tag_idx, mask, arcs, rels, revised_number
+
+    def uas_las(self, pred_arcs, pred_rels, gold_arcs, gold_rels):
+        arc_mask = pred_arcs.eq(gold_arcs)
+        rel_mask = pred_rels.eq(gold_rels) & arc_mask
+
+        total = len(arc_mask)
+        correct_arcs = arc_mask.sum().item()
+        correct_rels = rel_mask.sum().item()
+        return correct_arcs / (total + 1e-10), correct_rels / (total + 1e-10)
+
+    def cal_ppl_bygpt2(self, sents):
+        len_sents= len(sents)
+        ppl=0
+        for sent in sents:
+            inputs = torch.tensor(self.ppl_tokenizer.encode(sent)).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                outputs = self.ppl_model(inputs, labels=inputs)
+            loss, logits = outputs[:2]
+            ppl += torch.exp(loss).item()
+        return ppl/len_sents
+
+    def check_consistency(self, seqs, attack_seqs, tags, heads, rels):#raw_metric 原句指标
+        flag=False
+        if type(seqs)==list:
+            seqs = self.vocab.word2id([Corpus.ROOT] + seqs).unsqueeze(0)
+            if torch.cuda.is_available():
+                seqs = seqs.cuda()
+        if type(attack_seqs)==list:
+            attack_seqs = self.vocab.word2id([Corpus.ROOT] + attack_seqs).unsqueeze(0)
+            if torch.cuda.is_available():
+                attack_seqs = attack_seqs.cuda()
+        _, ref_metric = self.ref_task.evaluate([(seqs, tags, None, heads, rels)])
+        _, refadv_metric = self.ref_task.evaluate([(attack_seqs, tags, None, heads, rels)])
+        if ref_metric.uas==refadv_metric.uas and ref_metric.las==refadv_metric.las:#make sure the reference parser sees no changes before and after attack 
+            flag=True
+        return flag
+        
 
     def substituting(self, seq, index):
         try:
@@ -112,7 +182,7 @@ class Substituting(BlackBoxMethod):
         return tag_check_candidates, tag_check_indexes
 
     def check_pos_tag_under_each_index(self, seqs, tags, candidate, index):#仅部分词性的词汇才被攻击
-        #print("tags: ",tags)
+
         if self.config.blackbox_tagger == 'dict':
             if tags[index + 1] not in self.tag_dict:
                 return []
@@ -143,24 +213,57 @@ class Substituting(BlackBoxMethod):
         revised_number = 0
         for index, candidate in zip(indexes, candidates):#不同位置idx及该位置对应的候选词
             index_flag = self.check_uas_under_each_index(seqs, tag_idx, arcs, rels, candidate, index, raw_metric)
-            final_attack_seq[index] = candidate[index_flag]
-            revised_number += 1
+            if index_flag!=-1:
+                final_attack_seq[index] = candidate[index_flag]
+                revised_number += 1
+        return final_attack_seq, revised_number
+    
+    def check_uas_bak(self, seqs, tag_idx, arcs, rels, candidates, indexes, raw_metric):
+        final_attack_seq = self.copy_str_to_list(seqs)
+        revised_number = 0
+        for index, candidate in zip(indexes, candidates):#不同位置idx及该位置对应的候选词
+            index_flag = self.check_uas_under_each_index_bak(seqs, tag_idx, arcs, rels, candidate, index, raw_metric)
+            if index_flag!=-1:
+                final_attack_seq[index] = candidate[index_flag]
+                revised_number += 1
         return final_attack_seq, revised_number
 
+    def words2tensor(self, words, device=None):
+        seq_idx = [[self.vocab.word_dict.get(word.lower(), self.vocab.unk_index) for word in words]]
+        return torch.tensor(seq_idx, device=device)
+
     def check_uas_under_each_index(self, seqs, tag_idx, arcs, rels, candidate, index, raw_metric):
+        current_compare_uas = raw_metric.uas
+        current_index = CONSTANT.FALSE_TOKEN
+        for i, cand in enumerate(candidate):
+            seq_idx = self.copy_str_to_list(seqs)
+            attack_seqs = self.copy_str_to_list(seqs)
+            attack_seqs[index] = cand
+            flag = self.check_consistency(seq_idx, attack_seqs, tag_idx, arcs, rels)
+            attack_metric = self.get_metric_by_seqs(attack_seqs, tag_idx, arcs, rels)
+            if attack_metric.uas < current_compare_uas and flag:#某个位置的所有候选词全比较一遍，找UAS下降最多的候选词进行替换。
+                print("match cand:%s" %attack_seqs)
+                current_compare_uas = attack_metric.uas
+                current_index = i
+        if current_index == CONSTANT.FALSE_TOKEN:
+            return -1#如果没有能使UAS下降的就不替换
+        else:
+            return current_index#仅返回一句话UAS下降最多的候选token
+    
+    def check_uas_under_each_index_bak(self, seqs, tag_idx, arcs, rels, candidate, index, raw_metric):
         current_compare_uas = raw_metric.uas
         current_index = CONSTANT.FALSE_TOKEN
         for i, cand in enumerate(candidate):
             attack_seqs = self.copy_str_to_list(seqs)
             attack_seqs[index] = cand
             attack_metric = self.get_metric_by_seqs(attack_seqs, tag_idx, arcs, rels)
-            if attack_metric.uas < current_compare_uas:#某个位置的所有候选词全比较一遍，找UAS下降最多的进行替换。
+            if attack_metric.uas < current_compare_uas:
                 current_compare_uas = attack_metric.uas
                 current_index = i
         if current_index == CONSTANT.FALSE_TOKEN:
-            return 0
+            return -1#如果没有能使UAS下降的就不替换
         else:
-            return current_index#仅返回一句话UAS下降最多的token
+            return current_index
 
     def get_metric_by_seqs(self, attack_seqs, tag_idx, arcs, rels):
         attack_seq_idx = self.vocab.word2id([Corpus.ROOT] + attack_seqs).unsqueeze(0)

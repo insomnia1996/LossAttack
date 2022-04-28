@@ -152,6 +152,8 @@ class Corpus(object):
     
     @classmethod
     def load_special(cls, fname, idx_lst): #NOTE: 从conllx或sd表格中读取句法树结果，指定idx
+        #'ID', 'FORM', 'LEMMA', 'CPOS', 'POS', 'FEATS', 'HEAD', 'DEPREL', 'PHEAD', 'PDEPREL'
+        #FORM:adv句，LEMMA:原句，HEAD:原HEAD，DEPREL:原DEPREL，PHEAD:ADVHEAD,PDEPREL:ADVREL
         start, sentences = 0, []
         idx=0
         

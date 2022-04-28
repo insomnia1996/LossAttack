@@ -1,9 +1,41 @@
-from transformers import BertTokenizer, BertForMaskedLM, BartTokenizer, BartModel, BartConfig,BartForConditionalGeneration
+from transformers import BertTokenizer, BertForMaskedLM, BartTokenizer, BartModel, BartConfig,BartForConditionalGeneration, GPT2LMHeadModel, GPT2Tokenizer
 import torch
+import torch.nn as nn
+from config import Config
+from LossAttack.utils.corpus import Corpus
+from LossAttack.utils.vocab import Vocab
+config = Config('config.ini')
+train = Corpus.load(config.ftrain)
+vocab = torch.load(config.vocab)
 
+config.update({
+            'max_length':train.maxlen(),
+            'n_words': vocab.n_train_words,
+            'n_tags': vocab.n_tags,
+            'n_rels': vocab.n_rels,
+            'n_chars': vocab.n_chars,
+            'pad_index': vocab.pad_index,
+            'unk_index': vocab.unk_index
+        })
+print(config)
+
+def cal_ppl_bygpt2(sents):
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    model = GPT2LMHeadModel.from_pretrained("gpt2")
+    inputs = tokenizer(sents, padding='max_length', max_length=config.max_length, truncation=True, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs, labels=inputs['input_ids'])
+    loss = outputs[0]
+    shift_attentions = inputs['attention_mask'][:, 1:].contiguous()
+    # Flatten the tokens
+    meanloss = loss.sum(1) / shift_attentions.sum(1)
+    ppl = torch.exp(meanloss).numpy().tolist()
+    return ppl
+
+
+'''
 tokenizer2 = BartTokenizer.from_pretrained('facebook/bart-base', cache_dir = "./data/pretrained/bart-base")
 device=torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-
 article2 = "rolls-royce motor cars inc. said it expects its u.s. sales to get steady at about 1,200 cars in 1990."
 dec_str = tokenizer2.tokenize("<s>"+article2+"</s>")
 print(tokenizer2.eos_token_id,tokenizer2.pad_token_id,tokenizer2.bos_token_id, tokenizer2.mask_token_id)
@@ -24,7 +56,7 @@ print(tokenizer2.decode([    0,   252,   429,   190,  1149,    62,   647,    11,
           479,  1437,     2,     1,     1,     1,     1,     1,     1,     1,
             1,     1,     1,     1,     1,     1,     1,     1]))
 
-#TODO: 把corenlp加到lossattack vocab.numericalize里面，加入语法树（需要deleaf）
+#TODO: 把corenlp加到LossAttack vocab.numericalize里面，加入语法树（需要deleaf）
 from stanfordcorenlp import StanfordCoreNLP
 
 def pad_sequence(sequences, batch_first=False, padding_value=0.0):
@@ -82,12 +114,12 @@ def dec(ids):
     tokens = tokenizer2.convert_ids_to_tokens(ids)
     text = "".join(tokens).replace("Ġ"," ")
     return text
-'''
+
 nlp = StanfordCoreNLP(r'/home/lyt/stanford-corenlp-4.0.0', memory='8g', timeout=50000, quiet=False)
 
-str1=nlp.parse("it 's what 1 -rrb- explains why we are like , well , ourselves otherwise than <UNK> jackson ; 2 -rrb- cautions that it 's possible to <UNK> in a lake that averages two feet deep ; and 3 -rrb- predicts that 10,000 <UNK> placed before 10,000 <UNK> would produce <UNK> <UNK> rock 'n' roll <UNK> .")
+str1=nlp.parse("it 's what 1 -rrb- explains why we are like , well , ourselves otherwise than <UNK> jackson ; 2 -rrb- cautions that it 's possible to dive in a lake that averages two feet deep.")
 print(deleaf(str1))
-'''
+
 #再把deleaf的结果当作句法树输入 
 cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base"
 bartconfig = BartConfig.from_pretrained('facebook/bart-base', cache_dir=cache_dir)
@@ -142,4 +174,4 @@ for i in range(1000):
             torch.nn.utils.clip_grad_norm_(mlp_word.parameters(), 5.0)
             
             optimizer.step()
-            
+'''

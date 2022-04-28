@@ -3,6 +3,8 @@ from LossAttack.models.char import CharParser
 from LossAttack.models.word_tag import WordTagParser
 from LossAttack.models.word_char import WordCharParser
 from LossAttack.cmds.DEC.model import DECParser
+from LossAttack.models.crfpar.model import CRFParser
+from LossAttack.models.neuronlp2.models import StackPtrNet
 import torch
 
 
@@ -17,6 +19,10 @@ def init_parser(config, embeddings):
         return WordTagParser(config, embeddings)
     elif config.input == 'word_char':
         return WordCharParser(config, embeddings)
+    elif config.input == 'crf_par':
+        return CRFParser(config)
+    elif config.input == 'stackptr':
+        return StackPtrNet(config, word_embedding=embeddings)
     else:
         return CharParser(config, embeddings)
 

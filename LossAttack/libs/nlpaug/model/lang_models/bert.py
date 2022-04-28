@@ -4,6 +4,7 @@ import os
 try:
     import torch
     from transformers import BertTokenizer, BertForMaskedLM, BertConfig
+    from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 except ImportError:
     # No installation required if not using this function
     pass
@@ -17,12 +18,16 @@ class BertDeprecated(LanguageModels):
     MASK = '[MASK]'
     SUBWORD_PREFIX = '##'
 
-    def __init__(self, model_path='bert-base-uncased', tokenizer_path=None, device=None):
+    def __init__(self, model_path='bert-base-cased', tokenizer_path=None, device=None):
         super().__init__(device)
         self.model_path = model_path
         #bert_config = BertConfig.from_json_file(os.path.join(model_path, 'config.json'))
-        self.tokenizer = BertTokenizer.from_pretrained(model_path)
-        self.model = BertForMaskedLM.from_pretrained(model_path)
+        if "bert-large" in model_path:
+            self.tokenizer = BertTokenizer.from_pretrained("bert-large-cased", cache_dir=model_path)
+            self.model = BertForMaskedLM.from_pretrained("bert-large-cased", cache_dir=model_path)
+        else:
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased", cache_dir=model_path)
+            self.model = BertForMaskedLM.from_pretrained("bert-base-cased", cache_dir=model_path)
         self.model.to(device)
         self.model.eval()
 
@@ -72,8 +77,12 @@ class Bert(LanguageModels):
     def __init__(self, model_path='bert-base-cased', temperature=1.0, top_k=None, top_p=None, device='cuda'):
         super().__init__(device, temperature=temperature, top_k=top_k, top_p=top_p)
         self.model_path = model_path
-        self.tokenizer = BertTokenizer.from_pretrained(model_path)
-        self.model = BertForMaskedLM.from_pretrained(model_path)
+        if "bert-large" in model_path:
+            self.tokenizer = BertTokenizer.from_pretrained("bert-large-cased", cache_dir=model_path)
+            self.model = BertForMaskedLM.from_pretrained("bert-large-cased", cache_dir=model_path)
+        else:
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased", cache_dir=model_path)
+            self.model = BertForMaskedLM.from_pretrained("bert-base-cased", cache_dir=model_path)
     
         self.model.to(self.device)
         self.model.eval()
@@ -104,6 +113,61 @@ class Bert(LanguageModels):
         # Prediction
         with torch.no_grad():
             outputs = self.model(token_inputs, segment_inputs, mask_inputs)
+        target_token_logits = outputs[0][0][target_pos]
+
+        # Selection
+        seed = {'temperature': self.temperature, 'top_k': self.top_k, 'top_p': self.top_p}
+        target_token_logits = self.control_randomness(target_token_logits, seed)
+        target_token_logits, target_token_idxes = self.filtering(target_token_logits, seed)
+
+        results = self.pick(target_token_logits, target_word=target_word, n=n)
+        #print("res: ",results)#[('up', 0.23097165), ('substantial', 0.004066406), ('whole', 0.029276809), ('large', 0.29117775), ('major', 0.003024781), ('huge', 0.06783609), ('down', 0.014376994)]
+        return results
+
+class Roberta(LanguageModels):
+    START_TOKEN = '<s>'
+    SEPARATOR_TOKEN = '</s>'
+    MASK_TOKEN = '<mask>'
+    SUBWORD_PREFIX = 'Ġ'
+
+    def __init__(self, model_path='roberta-base', temperature=1.0, top_k=None, top_p=None, device='cuda'):
+        super().__init__(device, temperature=temperature, top_k=top_k, top_p=top_p)
+        self.model_path = model_path
+        print("init model Roberta...")
+        if "roberta-large" in model_path:
+            self.tokenizer = RobertaTokenizer.from_pretrained("roberta-large", cache_dir=model_path)
+            self.model = RobertaForMaskedLM.from_pretrained("roberta-large", cache_dir=model_path)
+        else:
+            self.tokenizer = RobertaTokenizer.from_pretrained("roberta-base", cache_dir=model_path)
+            self.model = RobertaForMaskedLM.from_pretrained("roberta-base", cache_dir=model_path)
+    
+        self.model.to(self.device)
+        self.model.eval()
+
+    def id2token(self, _id):
+        # id: integer format
+        return self.tokenizer.convert_ids_to_tokens([_id])[0]
+
+    def is_skip_candidate(self, candidate):
+        return candidate[:1] == self.SUBWORD_PREFIX
+
+    def predict(self, text, target_word=None, n=1):#双向语言模型，同时考虑MASK的前后文，因此需要完整句子。
+        # Prepare inputs
+        tokens = self.tokenizer.tokenize(text)
+        tokens.insert(0, self.START_TOKEN)
+    
+        target_pos = tokens.index(self.MASK_TOKEN)
+
+        token_inputs = self.tokenizer.convert_tokens_to_ids(tokens)
+        mask_inputs = [1] * len(token_inputs)  # 1: real token, 0: padding token
+
+        # Convert to feature
+        token_inputs = torch.tensor([token_inputs]).to(self.device)
+        # Prediction
+        with torch.no_grad():
+            #这里报的错，看看啥情况
+            print(token_inputs.shape)
+            outputs = self.model(input_ids=token_inputs)
         target_token_logits = outputs[0][0][target_pos]
 
         # Selection

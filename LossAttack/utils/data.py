@@ -237,7 +237,7 @@ class TextDataset(Dataset):
             assert tgt_length[i]==tgt_sublen_sum[i], print("Adv sample alignment wrong!")
         
 
-def batchify(dataset, batch_size, n_buckets=1, shuffle=False, collate_fn=collate_fn_bak):
+def batchify(dataset, batch_size, n_buckets=1, shuffle=False, collate_fn=collate_fn):
     batch_sampler = TextSampler(lengths=dataset.lengths,
                                 batch_size=batch_size,
                                 n_buckets=n_buckets,

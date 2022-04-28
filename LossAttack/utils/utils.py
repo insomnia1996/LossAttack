@@ -7,7 +7,7 @@ def get_blackbox_augmentor(config, method, path, revised_rate, vocab = None, ftr
     if method == 'bert':
         aug = naw.ContextualWordEmbsAug(model_path=path, aug_p=revised_rate, aug_min=1, top_k=110)
     elif method == 'glove':
-        aug = naw.WordEmbsAug(model_type=method, model_path=path, aug_p=revised_rate, aug_min=1)
+        aug = naw.WordEmbsAug(model_type=method, model_path=config.fembed, aug_p=revised_rate, aug_min=1)
     elif method == 'wordnet':
         aug = naw.SynonymAug(aug_src='wordnet',aug_min=1,aug_p=revised_rate)
     elif method == 'tag':

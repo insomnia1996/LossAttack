@@ -83,7 +83,6 @@ class ParserTask(Task):
                 mask &= words.unsqueeze(-1).ne(puncts).all(-1)
             pred_arcs, pred_rels = pred_arcs[mask], pred_rels[mask]
             gold_arcs, gold_rels = arcs[mask], rels[mask]
-
             metric(pred_arcs, pred_rels, gold_arcs, gold_rels)
         loss /= len(loader)
 
@@ -165,6 +164,129 @@ class ParserTask(Task):
 
             pred_arcs, pred_rels = self.decode(s_arc, s_rel, mask, mst)
             tags, pred_arcs, pred_rels = tags[mask], pred_arcs[mask], pred_rels[mask]
+            
+
+            all_tags.extend(torch.split(tags, lens))
+            all_arcs.extend(torch.split(pred_arcs, lens))
+            all_rels.extend(torch.split(pred_rels, lens))
+        all_tags = [self.vocab.id2tag(seq) for seq in all_tags]
+        all_arcs = [seq.tolist() for seq in all_arcs]
+        all_rels = [self.vocab.id2rel(seq) for seq in all_rels]
+
+        return all_tags, all_arcs, all_rels
+
+    def get_loss(self, s_arc, s_rel, gold_arcs, gold_rels):
+        s_rel = s_rel[torch.arange(len(s_rel)), gold_arcs]
+        # s_rel = s_rel[torch.arange(len(gold_arcs)), gold_arcs]
+
+        arc_loss = self.criterion(s_arc, gold_arcs)
+        rel_loss = self.criterion(s_rel, gold_rels)
+        loss = arc_loss + rel_loss
+
+        return loss
+
+    def decode(self, s_arc, s_rel, mask, mst):
+        from LossAttack.utils.alg import eisner
+        if mst:
+            pred_arcs = eisner(s_arc, mask)
+        else:
+            pred_arcs = s_arc.argmax(dim = -1)
+        # pred_arcs = s_arc.argmax(dim=-1)
+        # pred_rels = s_rel[torch.arange(len(s_rel)), pred_arcs].argmax(dim=-1)
+        pred_rels = s_rel.argmax(-1)
+        pred_rels = pred_rels.gather(-1, pred_arcs.unsqueeze(-1)).squeeze(-1)
+
+        return pred_arcs, pred_rels
+
+    def get_tags(self, words, tags, mask, tagger):
+        if tagger is None:
+            return tags
+        else:
+            tagger = tagger.eval()
+            lens = mask.sum(dim=1).tolist()
+            s_tags = tagger(words)
+            pred_tags = s_tags[mask].argmax(-1)
+            pred_tags = torch.split(pred_tags, lens)
+            pred_tags = pad_sequence(pred_tags, True)
+            pred_tags = torch.cat(
+                [torch.zeros_like(pred_tags[:, :1]), pred_tags], dim=1)
+            return pred_tags
+
+class StackPtrParserTask(Task):
+    def __init__(self, vocab, model):
+        super(StackPtrParserTask, self).__init__(vocab, model)
+
+        self.vocab = vocab
+        self.model = model
+        self.criterion = nn.CrossEntropyLoss()
+
+    def train(self, loader):
+        self.model.train()
+        step=0
+
+        for words, tags, chars, arcs, rels in loader:
+            # shape: [bsz, seq_len]
+            self.optimizer.zero_grad()
+
+            mask = words.ne(self.vocab.pad_index)
+            # ignore the first token of each sentence
+            mask[:, 0] = 0
+            # tags = self.get_tag(words, tags, mask)
+            loss_arc, loss_rel = self.model.loss(words, chars, tags, arcs, rels)
+            loss = torch.sum(loss_arc + loss_rel)/words.shape[0]
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
+            self.optimizer.step()
+            self.scheduler.step()
+            if step % 10==0:
+                print("Step {}, bloss: {}.".format(step, loss.item()/loss_arc.shape[0]))
+            step+=1
+
+    @torch.no_grad()
+    def evaluate(self, loader, punct=False, tagger=None, mst=False):
+        self.model.eval()
+
+        loss, metric = 0, ParserMetric()
+
+        for words, tags, chars, arcs, rels in loader:
+            mask = words.ne(self.vocab.pad_index)
+            # ignore the first token of each sentence
+            mask[:, 0] = 0
+
+            tags = self.get_tags(words, tags, mask, tagger)
+            
+            pred_arcs, pred_rels  = self.model.decode(
+                words,  chars, tags, mask=mask)
+
+            # ignore all punctuation if not specified
+            if not punct:
+                puncts = words.new_tensor(self.vocab.puncts)
+                mask &= words.unsqueeze(-1).ne(puncts).all(-1)
+            pred_arcs, pred_rels = pred_arcs[mask.cpu()], pred_rels[mask.cpu()]
+            gold_arcs, gold_rels = arcs[mask.cpu()], rels[mask.cpu()]
+
+            metric(pred_arcs, pred_rels, gold_arcs, gold_rels)
+        loss /= len(loader)
+
+        return loss, metric
+
+    
+    @torch.no_grad()
+    def predict(self, loader, tagger=None, mst=False):
+        self.model.eval()
+
+        all_tags, all_arcs, all_rels = [], [], []
+        for words, tags, chars in loader:
+            mask = words.ne(self.vocab.pad_index)
+            # ignore the first token of each sentence
+            mask[:, 0] = 0
+            lens = mask.sum(dim=1).tolist()
+
+            tags = self.get_tags(words, tags, mask, tagger)
+            pred_arcs, pred_rels = self.model.decode(
+                words,  chars, tags, mask=mask)
+
+            tags, pred_arcs, pred_rels = tags[mask.cpu()], pred_arcs[mask.cpu()], pred_rels[mask.cpu()]
             
 
             all_tags.extend(torch.split(tags, lens))
@@ -379,7 +501,7 @@ class DECTask(Task):#TODO: 完成模型定义及task定义，从loader里取需�
         return loss, accuracy
 
     def pad_sequence(sequences, batch_first=False, padding_value=0.0):
-        # type: (List[Tensor], bool, float) -> Tensor
+        # type: (List[tensor], bool, float) -> tensor
         """
         Args:
             sequences (list[Tensor]): list of variable length sequences.

@@ -37,8 +37,8 @@ from .file_utils import cached_path
 logger = logging.getLogger(__name__)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
-    'bert-base-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased.tar.gz",
-    'bert-large-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased.tar.gz",
+    'bert-base-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased.tar.gz",
+    'bert-large-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased.tar.gz",
     'bert-base-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased.tar.gz",
     'bert-large-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased.tar.gz",
     'bert-base-multilingual-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased.tar.gz",
@@ -453,8 +453,8 @@ class PreTrainedBertModel(nn.Module):
         Params:
             pretrained_model_name: either:
                 - a str with the name of a pre-trained model to load selected in the list of:
-                    . `bert-base-uncased`
-                    . `bert-large-uncased`
+                    . `bert-base-cased`
+                    . `bert-large-cased`
                     . `bert-base-cased`
                     . `bert-base-multilingual`
                     . `bert-base-chinese`
@@ -1038,8 +1038,8 @@ class BertForQuestionAnswering(PreTrainedBertModel):
         `config`: either
             - a BertConfig class instance with the configuration to build a new model, or
             - a str with the name of a pre-trained model to load selected in the list of:
-                . `bert-base-uncased`
-                . `bert-large-uncased`
+                . `bert-base-cased`
+                . `bert-large-cased`
                 . `bert-base-cased`
                 . `bert-base-multilingual`
                 . `bert-base-chinese`

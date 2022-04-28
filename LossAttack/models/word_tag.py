@@ -110,6 +110,7 @@ class WordTagParser(nn.Module):#目前使用的是word_tag parser
         parser = cls(state['config'], state['embeddings'])
         parser.load_state_dict(state['state_dict'])
         parser.to(device)
+        print("parser device: ", device)
 
         return parser
 

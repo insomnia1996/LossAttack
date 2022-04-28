@@ -27,7 +27,7 @@ class Attack(object):
         self.task = ParserTask(self.vocab, self.parser)
         
         print("Load the dataset")
-        corpus = Corpus.load(config.ftest)
+        corpus = Corpus.load(config.fdata)
         dataset = TextDataset(self.vocab.numericalize(corpus, training=True))
         loader = DataLoader(dataset=dataset, collate_fn=collate_fn)#shuffle=False to match sentence index.
         return corpus, loader

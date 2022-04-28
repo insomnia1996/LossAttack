@@ -8,7 +8,7 @@ from Batch import MyIterator, batch_size_fn
 import os
 import pickle
 import torch
-from Corpus import Corpus
+from LossAttack.utils.corpus import Corpus
 from transformers import BartTokenizer
 from torch.utils.data import DataLoader, Dataset, Sampler
 
@@ -120,7 +120,7 @@ def create_dataset_bak(opt, SRC, TRG):
     
     data_fields = [('src', SRC), ('trg', TRG)]
     train = data.TabularDataset('./translate_transformer_temp.csv', format='csv', fields=data_fields)
-    device =torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+    device =torch.device('cuda' if torch.cuda.is_available() else "cpu")
     train_iter = MyIterator(train, batch_size=opt.batchsize, device=device,
                         repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                         batch_size_fn=batch_size_fn, train=True, shuffle=True)
@@ -219,7 +219,7 @@ def create_dataset(opt, number_path, sent_path, adv_path, train_or_dev='train'):
 
     
     textset = TextDataset((sent_word, sent_arc, sent_rel, adv_word, adv_arc, adv_rel))
-    device =torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+    device =torch.device('cuda' if torch.cuda.is_available() else "cpu")
     batch_sampler = TextSampler(lengths=textset.lengths,
                                 batch_size=opt.batchsize,
                                 n_buckets=1,
@@ -257,7 +257,7 @@ def load_dataset(opt, number_path, sent_path, adv_path,  train_or_dev='train'):
     print("sample: ",barttkn.decode(sent_word[0]),barttkn.decode(sent_word[1]),barttkn.decode(sent_word[2]))
     #number = [torch.tensor([le], dtype=torch.int32) for le in range(opt.train_len)]
     textset = TextDataset((sent_word, sent_arc, sent_rel, adv_word, adv_arc, adv_rel))#number))
-    device =torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+    device =torch.device('cuda' if torch.cuda.is_available() else "cpu")
     batch_sampler = TextSampler(lengths=textset.lengths,
                                 batch_size=opt.batchsize,
                                 n_buckets=1,

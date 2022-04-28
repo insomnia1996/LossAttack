@@ -10,6 +10,7 @@ from LossAttack.libs.nlpaug.util import Action
 
 BERT_MODEL = {}
 XLNET_MODEL = {}
+ROBERTA_MODEL = {}
 
 
 def init_bert_model(model_path, device, force_reload=False, temperature=1.0, top_k=None, top_p=None):
@@ -45,13 +46,29 @@ def init_xlnet_model(model_path, device, force_reload=False, temperature=1.0, to
 
     return xlnet_model
 
+def init_roberta_model(model_path, device, force_reload=False, temperature=1.0, top_k=None, top_p=None):
+    # Load models once at runtime
+
+    global ROBERTA_MODEL
+    if ROBERTA_MODEL and not force_reload:
+        ROBERTA_MODEL.temperature = temperature
+        ROBERTA_MODEL.top_k = top_k
+        ROBERTA_MODEL.top_p = top_p
+        return ROBERTA_MODEL
+
+    roberta_model = nml.Roberta(model_path, device=device, temperature=temperature, top_k=top_k, top_p=top_p)
+    roberta_model.model.eval()
+    ROBERTA_MODEL = roberta_model
+
+    return roberta_model
+
 
 class ContextualWordEmbsAug(WordAugmenter):
     """
     Augmenter that leverage contextual word embeddings to find top n similar word for augmentation.
 
     :param str model_path: Model name or models path. It used transformers to load the models. Tested
-        'bert-base-uncased', 'xlnet-base-cased'.
+        'bert-base-cased', 'xlnet-base-cased'.
     :param str action: Either 'insert or 'substitute'. If value is 'insert', a new word will be injected to random
         position according to contextual word embeddings calculation. If value is 'substitute', word will be replaced
         according to contextual embeddings calculation
@@ -75,7 +92,7 @@ class ContextualWordEmbsAug(WordAugmenter):
     >>> aug = naw.ContextualWordEmbsAug()
     """
 
-    def __init__(self, model_path='bert-base-uncased', action="substitute", temperature=1.0, top_k=100, top_p=None,
+    def __init__(self, model_path='bert-base-cased', action="substitute", temperature=1.0, top_k=100, top_p=None,
                  name='ContextualWordEmbs_Aug', aug_min=1, aug_p=0.3, stopwords=None, skip_unknown_word=False,
                  device=None, force_reload=False, verbose=0):
         super().__init__(
@@ -97,6 +114,8 @@ class ContextualWordEmbsAug(WordAugmenter):
     def _init(self):
         if 'xlnet' in self.model_path:
             self.model_type = 'xlnet'
+        elif 'roberta' in self.model_path:
+            self.model_type = 'roberta'
         elif 'bert' in self.model_path:
             self.model_type = 'bert'
         else:
@@ -123,6 +142,10 @@ class ContextualWordEmbsAug(WordAugmenter):
                     token2subword[i].append(subword_pos)
                     subword_pos += 1
                 elif self.model_type in ['xlnet'] and self.model.SUBWORD_PREFIX not in subword and \
+                        subword not in string.punctuation:
+                    token2subword[i].append(subword_pos)
+                    subword_pos += 1
+                elif self.model_type in ['roberta'] and self.model.SUBWORD_PREFIX not in subword and \
                         subword not in string.punctuation:
                     token2subword[i].append(subword_pos)
                     subword_pos += 1
@@ -171,7 +194,7 @@ class ContextualWordEmbsAug(WordAugmenter):
         results = []
         for aug_idx in aug_idxes:
             original_word = tokens[aug_idx]
-            #print("original word: ",original_word)
+            print("original word: ",original_word)
             tokens[aug_idx] = self.model.MASK_TOKEN
             masked_text = ' '.join(tokens)
             #print("BERT masked input: ",masked_text)
@@ -185,9 +208,12 @@ class ContextualWordEmbsAug(WordAugmenter):
 
     @classmethod
     def get_model(cls, model_path, device='cuda', force_reload=False, temperature=1.0, top_k=None, top_p=0):
-        if 'bert' in model_path:
+        if 'roberta' in model_path:
+            return init_roberta_model(model_path, device, force_reload, temperature, top_k, top_p)
+        elif 'bert' in model_path:
             return init_bert_model(model_path, device, force_reload, temperature, top_k, top_p)
-        if 'xlnet' in model_path:
+        elif 'xlnet' in model_path:
             return init_xlnet_model(model_path, device, force_reload, temperature, top_k, top_p)
+        
 
         raise ValueError('Model name value is unexpected. Only support bert and xlnet models.')

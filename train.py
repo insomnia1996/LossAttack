@@ -28,6 +28,7 @@ def null(model, opt, arg):# save count_map {sentid_in_train: sentid} to match ea
 
 def train_model(model, opt, arg):
     tokenizer2 = BartTokenizer.from_pretrained('facebook/bart-base', cache_dir = "./data/pretrained/bart-base")
+    
     print("training model...")
     model.train()
     start = time.time()
@@ -53,7 +54,7 @@ def train_model(model, opt, arg):
         for i, batch in enumerate(loader): 
             #src = batch.src.transpose(0,1)
             #trg = batch.trg.transpose(0,1)
-            trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+            trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
             trg_input = trg[:, :-1]
             trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
             trg_rel = trg_rel[:,:-1]#长度与trg_sent不等，需单独mask
@@ -63,7 +64,7 @@ def train_model(model, opt, arg):
             #print(src_mask, trg_mask)#enc mask全1，dec mask为下三角阵
             preds = model(src, src_arc, src_rel, trg_input, src_mask, trg_mask)
             #preds = model(src, trg_input, src_mask, trg_mask)#不输入ground true句法树，因为作为denoiser获取不到
-
+            
             opt.optimizer.zero_grad()
             ys = trg[:, 1:].contiguous()
             loss_fct = torch.nn.CrossEntropyLoss(ignore_index=opt.trg_pad, reduction='mean')
@@ -105,7 +106,6 @@ def evaluate_model(model, opt, arg):
     #state_dict = torch.load('weight/model_weights.pkl')
     #model.load_state_dict(state_dict)
 
-    tokenizer2 = BartTokenizer.from_pretrained('facebook/bart-base', cache_dir = "./data/pretrained/bart-base")
     print("evaluating...")
     model.eval()
     start = time.time()
@@ -122,7 +122,7 @@ def evaluate_model(model, opt, arg):
         #MODIFIED
         #src = batch.src.transpose(0,1)
         #trg = batch.trg.transpose(0,1)
-        trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+        trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
         trg_input = trg[:, :-1]
         trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
         trg_rel = trg_rel[:,:-1]#长度与trg_sent不等，需单独mask
@@ -175,7 +175,7 @@ def predict(model, opt, arg):
     else:
         loader = opt.test
     for i, batch in enumerate(tqdm(loader)): 
-        trg, trg_arc, trg_rel, src, src_arc, src_rel, _ = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
+        trg, trg_arc, trg_rel, src, src_arc, src_rel = list(batch)# ori_sent, ori_arc, ori_rel, adv_sent, adv_arc, adv_rel
         
         trg_input = trg[:, :-1]
         trg_arc = trg_arc[:,:-1]#长度与trg_sent不等，需单独mask
@@ -286,8 +286,8 @@ def main_for_bi_tir():
     parser.add_argument('-floyd', action='store_true')
     parser.add_argument('-checkpoint', type=int, default=0)
     parser.add_argument('-device', type=int, default=0)
-    parser.add_argument('-tensor_dir', type=str, default='/data/luoyt/dpattack/data/tensor')
-    parser.add_argument('-data_path', type=str, default='/data/luoyt/dpattack/data')
+    parser.add_argument('-tensor_dir', type=str, default='/home/lyt/LossAttack/data/tensor')
+    parser.add_argument('-data_path', type=str, default='/home/lyt/LossAttack/data')
 
     opt = parser.parse_args()
     

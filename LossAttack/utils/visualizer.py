@@ -1,7 +1,7 @@
 from spacy import displacy
 from pathlib import Path
 
-from corpus import Corpus, Sentence
+from LossAttack.utils.corpus import Corpus, Sentence
 from config import Config
 
 import numpy as np

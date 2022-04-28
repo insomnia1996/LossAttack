@@ -28,9 +28,12 @@ class XlNet(LanguageModels):
                  device=None):
         super().__init__(device, temperature=temperature, top_k=top_k, top_p=top_p)
         self.model_path = model_path
-
-        self.tokenizer = XLNetTokenizer.from_pretrained(model_path)
-        self.model = XLNetLMHeadModel.from_pretrained(model_path)
+        if "xlnet-large" in model_path:
+            self.tokenizer = XLNetTokenizer.from_pretrained("xlnet-large-cased", cache_dir=model_path)
+            self.model = XLNetLMHeadModel.from_pretrained("xlnet-large-cased", cache_dir=model_path)
+        else:
+            self.tokenizer = XLNetTokenizer.from_pretrained("xlnet-base-cased", cache_dir=model_path)
+            self.model = XLNetLMHeadModel.from_pretrained("xlnet-base-cased", cache_dir=model_path)
 
         self.padding_text_idxes = self.tokenizer.encode(padding_text or self.PADDING_TEXT)
 

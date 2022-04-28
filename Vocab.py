@@ -2,7 +2,7 @@ from transformers import BartTokenizer, BartModel
 import os,regex
 import pickle
 import torch
-from Corpus import Corpus
+from LossAttack.utils.corpus import Corpus
 from collections import Counter
 
 class Vocab(object):

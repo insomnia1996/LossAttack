@@ -44,7 +44,7 @@ class DECAug(WordAugmenter):
     Augmenter that leverage contextual word embeddings to find top n similar word for augmentation.
 
     :param str model_path: Model name or models path. It used transformers to load the models. Tested
-        'bert-base-uncased', 'xlnet-base-cased'.
+        'bert-base-cased', 'xlnet-base-cased'.
     :param str action: Either 'insert or 'substitute'. If value is 'insert', a new word will be injected to random
         position according to contextual word embeddings calculation. If value is 'substitute', word will be replaced
         according to contextual embeddings calculation
@@ -68,7 +68,7 @@ class DECAug(WordAugmenter):
     >>> aug = naw.ContextualWordEmbsAug()
     """
 
-    def __init__(self, config, model_path='bert-base-uncased', action="substitute", temperature=1.0, top_k=100, top_p=None,
+    def __init__(self, config, model_path='bert-base-cased', action="substitute", temperature=1.0, top_k=100, top_p=None,
                  name='ContextualWordEmbs_Aug', aug_min=1, aug_p=0.3, stopwords=None, skip_unknown_word=False,
                  device=None, force_reload=False, verbose=0):
         super().__init__(
@@ -82,7 +82,6 @@ class DECAug(WordAugmenter):
 
         self._init()
         self.model = self.get_model(config)
-        self.device = config.device
         self.tokenizer = BartTokenizer.from_pretrained('facebook/bart-base', cache_dir = "./data/pretrained/bart-base")
 
     def _init(self):

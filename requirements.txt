@@ -1,4 +1,3 @@
-torch==1.9.0+cu111
 gensim==4.1.2
 transformers==4.10.2
 nltk==3.6.2
@@ -7,7 +6,7 @@ requests==2.26.0
 spacy==3.1.2
 colorama==0.4.4
 regex==2021.8.28
-tensorflow==2.6.0
+tensorflow
 pandas==1.3.3
 tqdm==4.62.2
 matplotlib==3.4.3
@@ -18,10 +17,9 @@ boto3==1.18.44
 botocore==1.21.44
 Cython==0.29.24
 dill==0.3.4
-faiss==1.5.3
 librosa==0.8.1
 psutil==5.8.0
 scikit_learn==0.24.2
 stanfordcorenlp==3.9.1.1
 tabulate==0.8.9
-torchtext==0.10.0
+torchtext==0.6.0

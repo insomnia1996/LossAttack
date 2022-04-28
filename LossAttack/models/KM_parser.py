@@ -1425,7 +1425,7 @@ class ChartParser(nn.Module):
         if 'use_bert_only' not in hparams:
             hparams['use_bert_only'] = False
         if 'bert_model' not in hparams:
-            hparams['bert_model'] = "bert-large-uncased"
+            hparams['bert_model'] = "bert-large-cased"
         if 'bert_do_lower_case' not in hparams:
             hparams['bert_do_lower_case'] = False
         if 'bert_transliterate' not in hparams:

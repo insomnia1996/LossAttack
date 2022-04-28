@@ -45,7 +45,7 @@ class BertAug(WordAugmenter):
     >>> aug = naw.BertAug()
     """
 
-    def __init__(self, model_path='bert-base-uncased', tokenizer_path='bert-base-uncased', action=Action.SUBSTITUTE,
+    def __init__(self, model_path='bert-base-cased', tokenizer_path='bert-base-cased', action=Action.SUBSTITUTE,
                  name='Bert_Aug', aug_min=1, aug_p=0.3, aug_n=5, stopwords=None, device='cpu', verbose=0):
         super().__init__(
             action=action, name=name, aug_p=aug_p, aug_min=aug_min, tokenizer=None, stopwords=stopwords,

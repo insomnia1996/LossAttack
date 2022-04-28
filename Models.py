@@ -10,116 +10,83 @@ from Sublayers import Norm
 import copy
 from Batch import create_masks
 from Beam import k_best_outputs, init_beam
-from transformers.models.bart.modeling_bart import (
-    BartEncoder, 
-    BartDecoder,
-    BartConfig,
-    BartLearnedPositionalEmbedding
-)
+from torch.nn import TransformerEncoderLayer, TransformerEncoder, LayerNorm, TransformerDecoder, TransformerDecoderLayer
 from syntemb import SyntEmb
 
 def get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, dropout):
-        super().__init__()
-        self.N = N
-        self.embed = Embedder(vocab_size, d_model)
-        self.pe = PositionalEncoder(d_model, dropout=dropout)
-        self.layers = get_clones(EncoderLayer(d_model, heads, dropout), N)
-        self.norm = Norm(d_model)
-    def forward(self, src, mask):
-        x = self.embed(src)
-        x = self.pe(x)
-        for i in range(self.N):
-            x = self.layers[i](x, mask)
-        return self.norm(x)
-    
-class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, dropout):
-        super().__init__()
-        self.N = N
-        self.embed = Embedder(vocab_size, d_model)
-        self.pe = PositionalEncoder(d_model, dropout=dropout)
-        self.layers = get_clones(DecoderLayer(d_model, heads, dropout), N)
-        self.norm = Norm(d_model)
-    def forward(self, trg, e_outputs, src_mask, trg_mask):
-        x = self.embed(trg)
-        x = self.pe(x)
-        for i in range(self.N):
-            x = self.layers[i](x, e_outputs, src_mask, trg_mask)
-        return self.norm(x)
-
-class Transformer_bak(nn.Module):
-    def __init__(self, src_vocab, trg_vocab, d_model, N, heads, dropout):
-        super().__init__()
-        self.encoder = Encoder(src_vocab, d_model, N, heads, dropout)
-        self.decoder = Decoder(trg_vocab, d_model, N, heads, dropout)
-        self.out = nn.Linear(d_model, trg_vocab)
-    def forward(self, src, trg, src_mask, trg_mask):
-        e_outputs = self.encoder(src, src_mask)
-        #print("DECODER")
-        d_output = self.decoder(trg, e_outputs, src_mask, trg_mask)
-        output = self.out(d_output)
-        return output
 
 class Transformer(nn.Module):
-    def __init__(self, config, trg_vocab):
+    def __init__(self, config, src_vocab, trg_vocab):
         super().__init__()
-        self.encoder = BartEncoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base")
-        config.vocab_size = trg_vocab
-        self.decoder = BartDecoder(config)#.from_pretrained('facebook/bart-base', cache_dir="/home/lyt/LossAttack/data/pretrained/bart-base")
-        self.out = nn.Linear(config.d_model, config.vocab_size)
+        encoder_layer = TransformerEncoderLayer(config.d_model, config.heads, 2048, config.dropout)
+        encoder_norm = LayerNorm(config.d_model)
+        self.encoder = TransformerEncoder(encoder_layer, config.n_layers, encoder_norm)
+        encoder_layer2 = TransformerEncoderLayer(config.d_model, config.heads, 2048, config.dropout)
+        encoder_norm2 = LayerNorm(config.d_model)
+        self.encoder2 = TransformerEncoder(encoder_layer2, config.n_layers, encoder_norm2)
+        decoder_layer = TransformerDecoderLayer(config.d_model, config.heads, 2048, config.dropout)
+        decoder_norm = LayerNorm(config.d_model)
+        self.decoder = TransformerDecoder(decoder_layer, config.n_layers, decoder_norm)
+        self.out = nn.Linear(config.d_model, trg_vocab)
         #print("d_model, vocab_size:",config.d_model, config.vocab_size)
+        
         n_rels=47
         max_length=155
         n_tags=49
-        self.syntemb = SyntEmb(config, max_length)
-        self.syntemb2 = SyntEmb(config, n_rels)
-        #self.parser = WordParser(config, n_rels)
+        self.word_emb = nn.Embedding(src_vocab, config.d_model,padding_idx=0)
+        self.synt_emb = nn.Embedding(max_length, config.d_model)
+        self.synt_emb2 = nn.Embedding(n_rels, config.d_model)
 
-        config.is_encoder_decoder = True
-        self.pad_token_id = config.pad_token_id
+        self.pad_token_id = 0
         print(config)
     
     def forward(self, src, src_arc, src_rel, trg, src_mask, trg_mask):
-        e_outputs = self.encoder(input_ids=src, attention_mask=src_mask.squeeze(1))
-        #src_arc, src_rel = self.parser(src)
-        
-        #src_arc = src_arc.argmax(-1)
-        #src_rel = src_rel.argmax(-1)
-        #src_rel = src_rel.gather(-1, src_arc.unsqueeze(-1)).squeeze(-1)
-        arc_hidden = self.syntemb(src_arc)
-        rel_hidden = self.syntemb2(src_rel)
-        synt_hidden = torch.cat((arc_hidden, rel_hidden), dim=1)
-        enc_hidden = torch.cat((e_outputs[0], synt_hidden), dim=1)
-        #enc_hidden = e_outputs[0]
+        src = src.t()
+        src_arc = src_arc.t()
+        src_rel = src_rel.t()
+        trg = trg.t()
+        #print(src.shape, src_arc.shape)
+
+        src_emb = self.word_emb(src)
+        e_outputs = self.encoder(src=src_emb)
+
+        arc_emb = self.synt_emb(src_arc)
+        rel_emb = self.synt_emb2(src_rel)
+        tree_emb = arc_emb + rel_emb 
+        s_outputs = self.encoder2(tree_emb)
+        enc_hidden = torch.cat((e_outputs, s_outputs), dim=0)
+
         #print("encoder output: ", enc_hidden.shape)
-        d_outputs = self.decoder(input_ids=trg, attention_mask=trg_mask.squeeze(1), encoder_hidden_states=enc_hidden)
-        d_outputs = d_outputs[0]
+        trg_emb = self.word_emb(trg)
+        d_outputs = self.decoder(tgt=trg_emb, memory=enc_hidden)
+
         #print("decoder output: ", d_outputs.shape)
-        output = self.out(d_outputs)#(bsz, seq_len, vocab_size)
+
+        output = self.out(d_outputs).transpose(0,1).contiguous()#(bsz, seq_len, vocab_size)
         return output
     
     def encode(self, src, src_arc, src_rel, src_mask):
-        e_outputs = self.encoder(input_ids=src, attention_mask=src_mask.squeeze(1))
-        #src_arc, src_rel = self.parser(src)
-        #mask = self.get_mask(src, self.pad_token_id,punct_list=[2, 3, 5, 6, 7, 8, 25, 26, 27, 28, 29, 34, 35, 1954, 1955, 1959])
-        #src_arc = src_arc[:,mask.squeeze(0)].argmax(dim=2).contiguous()
-        #src_rel = src_rel[:,mask.squeeze(0)].argmax(dim=2).contiguous()
-        arc_hidden = self.syntemb(src_arc)
-        rel_hidden = self.syntemb2(src_rel)
-        synt_hidden = torch.cat((arc_hidden, rel_hidden), dim=1)
-        enc_hidden = torch.cat((e_outputs[0], synt_hidden), dim=1)
+        src = src.t()
+        src_arc = src_arc.t()
+        src_rel = src_rel.t()
+        src_emb = self.word_emb(src)
+        e_outputs = self.encoder(src=src_emb)
+        arc_emb = self.synt_emb(src_arc)
+        rel_emb = self.synt_emb2(src_rel)
+        tree_emb = arc_emb + rel_emb 
+        s_outputs = self.encoder2(tree_emb)
+        enc_hidden = torch.cat((e_outputs, s_outputs), dim=0)
         
         return enc_hidden
     
     def decode(self, enc_hidden, trg, trg_mask):
-        d_outputs = self.decoder(input_ids=trg, attention_mask=trg_mask.squeeze(1), encoder_hidden_states=enc_hidden)
-        d_outputs = d_outputs[0]
-        #print("decoder output: ", d_outputs.shape)
-        output = self.out(d_outputs)#(bsz, seq_len, vocab_size)
+        trg = trg.t()
+        trg_emb = self.word_emb(trg)
+        d_outputs = self.decoder(tgt=trg_emb, memory=enc_hidden)
+
+        output = self.out(d_outputs).transpose(0,1).contiguous()#(bsz, seq_len, vocab_size)
         return output
 
     def predict(self, src, src_arc, src_rel, opt):#均为[1,seq_len]的tensor
@@ -206,10 +173,7 @@ def get_model(opt, src_vocab, trg_vocab):
     
     assert opt.d_model % opt.heads == 0
     assert opt.dropout < 1
-    #MODIFIED
-    config = BartConfig(vocab_size=src_vocab, d_model=opt.d_model, encoder_layers=opt.n_layers, decoder_layers=opt.n_layers,
-                encoder_attention_heads=opt.heads, decoder_attention_heads=opt.heads, dropout=opt.dropout)
-    model = Transformer(config, trg_vocab)
+    model = Transformer(opt, src_vocab, trg_vocab)
     #model = Transformer(src_vocab, trg_vocab, opt.d_model, opt.n_layers, opt.heads, opt.dropout)
     
        
